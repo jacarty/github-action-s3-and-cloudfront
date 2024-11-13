@@ -1,4 +1,5 @@
 name: Upload to S3 Prod and update Cloudfront
+description: 'Upload to S3 Prod and update Cloudfront Distribution'
 
 permissions:
   id-token: write
