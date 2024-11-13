@@ -1,0 +1,62 @@
+name: Upload to S3 Prod and update Cloudfront
+
+permissions:
+  id-token: write
+  contents: read
+
+run-name: ${{ github.actor }} is working on upload to S3 Prod and Cloudfront updates 🚀
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy-to-S3-prod:
+    runs-on: ubuntu-latest
+
+    steps:
+      - run: echo "🎉 The job was automatically triggered by a ${{ github.event_name }} event."
+      
+      - name: Check out repository code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Needed to get a list of changed files         
+      
+      - run: echo "💡 The ${{ github.repository }} repository has been cloned to the runner."
+      - run: echo "🖥️ The workflow is now ready to test your code on the runner."
+      
+      - name: List files in the repository
+        run: |
+          ls ${{ github.workspace }}
+          
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ secrets.AWS_REGION }}
+      
+      - name: Sync files to S3
+        run: |
+          changed_files=$(git diff --name-only HEAD^ HEAD)
+          echo "The following files will be uploaded to S3:"
+          echo "$changed_files"
+          for file in $changed_files; do
+            aws s3 cp "$file" s3://${{ secrets.AWS_PROD_S3_BUCKET }}/"$file" \
+              --exclude "README.md" \
+              --exclude ".git/*" \
+              --exclude ".gitignore" \
+              --storage-class STANDARD
+          done
+                
+      - name: Invalidate CloudFront Distribution for uploaded files
+        env:
+          DISTRIBUTION_ID: ${{ secrets.AWS_CLOUDFRONT_DISTRIBUTION_ID }}
+        run: |
+          changed_files=$(git diff --name-only HEAD^ HEAD)
+          ls $changed_files
+          for file in $changed_files; do
+            aws cloudfront create-invalidation --distribution-id $DISTRIBUTION_ID --paths "/$file"
+          done
+      
+      - run: echo "🍏 This job's status is ${{ job.status }}."
